@@ -2,6 +2,30 @@
     "controllerId": 1,
     "stepCount": 9,
     "initialStep": 1,
+    "sunLevels": [
+        {
+            "level": 1,
+            "zoneMinStep": 2,
+            "zoneMaxStep": 4,
+            "lightIntensity": 0.6000000238418579,
+            "glowScale": 0.800000011920929
+        },
+        {
+            "level": 2,
+            "zoneMinStep": 4,
+            "zoneMaxStep": 6,
+            "lightIntensity": 1.0,
+            "glowScale": 1.0
+        },
+        {
+            "level": 3,
+            "zoneMinStep": 6,
+            "zoneMaxStep": 8,
+            "lightIntensity": 1.600000023841858,
+            "glowScale": 1.2999999523162842
+        }
+    ],
+    "initialSunLevel": 2,
     "zoneMinStep": 4,
     "zoneMaxStep": 6,
     "fadeWidthStep": 1.0,
@@ -10,5 +34,16 @@
     "settleDelay": 1.0,
     "waitForArrival": true,
     "ignoreSameAsLastSettled": false,
-    "useUnscaledTime": true
+    "useUnscaledTime": true,
+    "idleTimeoutSeconds": 30.0,
+    "idleVideoFolder": "idle",
+    "introSecondsPerMessage": 3.0,
+    "introFadeSeconds": 0.4000000059604645,
+    "introMessages": [
+        "밤하늘의 수많은 별 중에서, 우리 지구처럼 생명체가 살 수 있는 곳은 어디에 있을까요?",
+        "생명이 숨 쉬려면 단순히 따뜻한 것만으로는 부족해요.",
+        "온도를 지켜주는 마법의 물질인 '액체 상태의 물',",
+        "그리고 그 물이 도망가지 못하게 꽉 잡아주는 '대기'가 꼭 필요하답니다.",
+        "자, 이제 직접 지구 모형을 움직여서\n생명체가 살아갈 수 있는 위치인\n골디락스 존을 찾아보세요!"
+    ]
 }

@@ -73,3 +73,16 @@ crashlytics-build.properties
 # Temporary auto-generated Android Assets
 /[Aa]ssets/[Ss]treamingAssets/aa.meta
 /[Aa]ssets/[Ss]treamingAssets/aa/*
+
+# 전시용 영상 원본은 저장소에 넣지 않는다(용량 누적). 폴더 구조와 README 만 관리한다.
+# 운영 시 StreamingAssets/video/<단계>/ 와 video/idle/ 에 직접 넣을 것.
+/[Aa]ssets/[Ss]treamingAssets/video/**/*.mp4
+/[Aa]ssets/[Ss]treamingAssets/video/**/*.mov
+/[Aa]ssets/[Ss]treamingAssets/video/**/*.m4v
+/[Aa]ssets/[Ss]treamingAssets/video/**/*.webm
+/[Aa]ssets/[Ss]treamingAssets/video/**/*.avi
+/[Aa]ssets/[Ss]treamingAssets/video/**/*.mp4.meta
+/[Aa]ssets/[Ss]treamingAssets/video/**/*.mov.meta
+/[Aa]ssets/[Ss]treamingAssets/video/**/*.m4v.meta
+/[Aa]ssets/[Ss]treamingAssets/video/**/*.webm.meta
+/[Aa]ssets/[Ss]treamingAssets/video/**/*.avi.meta

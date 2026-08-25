@@ -35,6 +35,9 @@ public class GoldilocksZoneModel : MonoBehaviour
     [Tooltip("단계 변경/정착을 콘솔에 남긴다. 현장 배포 시 꺼둘 것.")]
     [SerializeField] private bool verboseLog = true;
 
+    // D 신호를 받을 때마다 발생. 값이 이전과 같아도 발생한다.
+    // 위치가 아니라 "체험자가 조작했다"는 사실이 필요한 쪽이 쓴다.
+    public event Action<int> OnStepSignal;
     // 신호가 들어와 단계가 바뀐 즉시 발생
     public event Action<int> OnStepChanged;
     // 값 변화가 멎고 settleDelay 가 지난 뒤 발생 (waitForArrival 이면 지구 도착까지 대기)
@@ -52,9 +55,38 @@ public class GoldilocksZoneModel : MonoBehaviour
     public float CurrentRadius => RadiusAt(CurrentStep);
     public ZoneState CurrentZone => Evaluate(CurrentStep);
 
+    // 현재 태양 세기(1~3). 세기가 바뀌면 골디락스 존 범위가 통째로 이동한다.
+    public int SunLevel { get; private set; } = 1;
+    public event Action<int> OnSunLevelChanged;
+
+    // 현재 세기에 해당하는 설정. 못 찾으면 예비값으로 만든 설정을 돌려준다.
+    public SunLevelConfig CurrentSunLevel
+    {
+        get
+        {
+            var levels = Config.sunLevels;
+            if (levels != null)
+                for (int i = 0; i < levels.Count; i++)
+                    if (levels[i] != null && levels[i].level == SunLevel)
+                        return levels[i];
+
+            return new SunLevelConfig
+            {
+                level = SunLevel,
+                zoneMinStep = Config.zoneMinStep,
+                zoneMaxStep = Config.zoneMaxStep,
+                lightIntensity = -1f,
+                glowScale = -1f,
+            };
+        }
+    }
+
+    public int ZoneMinStep => CurrentSunLevel.zoneMinStep;
+    public int ZoneMaxStep => CurrentSunLevel.zoneMaxStep;
+
     // 원판 경계용. 예) 존이 D4~D6 이면 안쪽 경계는 D3.5, 바깥쪽 경계는 D6.5.
-    public float ZoneInnerBoundaryStep => Config.zoneMinStep - 0.5f;
-    public float ZoneOuterBoundaryStep => Config.zoneMaxStep + 0.5f;
+    public float ZoneInnerBoundaryStep => ZoneMinStep - 0.5f;
+    public float ZoneOuterBoundaryStep => ZoneMaxStep + 0.5f;
     public float ZoneInnerRadius => RadiusAt(ZoneInnerBoundaryStep);
     public float ZoneOuterRadius => RadiusAt(ZoneOuterBoundaryStep);
 
@@ -90,7 +122,7 @@ public class GoldilocksZoneModel : MonoBehaviour
 
         if (verboseLog)
             Debug.Log($"[Goldilocks] 초기화 D1={MinRadius:F4} D{StepCount}={MaxRadius:F4} " +
-                      $"1스텝={StepWidth:F4} 존=D{Config.zoneMinStep}~D{Config.zoneMaxStep} " +
+                      $"1스텝={StepWidth:F4} 태양세기={SunLevel} 존=D{ZoneMinStep}~D{ZoneMaxStep} " +
                       $"시작=D{CurrentStep}");
     }
 
@@ -107,7 +139,52 @@ public class GoldilocksZoneModel : MonoBehaviour
 
         ResolveReferences();
         ReadRadiiFromMarkers();
+
+        // 에디터에서 원판을 미리 보려면 세기도 여기서 정해져 있어야 한다.
+        SunLevel = ClampSunLevel(Config.initialSunLevel);
+
         initialized = true;
+    }
+
+    // 태양 세기를 바꾼다. 존 범위가 통째로 이동하므로 현재 단계의 존 판정도 함께 바뀐다.
+    // 단계(D)는 그대로 두고 "어디까지가 살 수 있는 구간인가"만 달라진다.
+    public void SetSunLevel(int level)
+    {
+        level = ClampSunLevel(level);
+        if (level == SunLevel) return;
+
+        SunLevel = level;
+
+        if (verboseLog)
+            Debug.Log($"[Goldilocks] 태양 세기 {SunLevel} - 존 D{ZoneMinStep}~D{ZoneMaxStep} " +
+                      $"(현재 D{CurrentStep}: {ZoneLabel(CurrentZone)})");
+
+        OnSunLevelChanged?.Invoke(SunLevel);
+    }
+
+    public int SunLevelCount
+    {
+        get
+        {
+            var levels = Config.sunLevels;
+            return levels != null && levels.Count > 0 ? levels.Count : 1;
+        }
+    }
+
+    private int ClampSunLevel(int level)
+    {
+        var levels = Config.sunLevels;
+        if (levels == null || levels.Count == 0) return level;
+
+        int min = int.MaxValue, max = int.MinValue;
+        for (int i = 0; i < levels.Count; i++)
+        {
+            if (levels[i] == null) continue;
+            if (levels[i].level < min) min = levels[i].level;
+            if (levels[i].level > max) max = levels[i].level;
+        }
+        if (min > max) return level;
+        return Mathf.Clamp(level, min, max);
     }
 
     private void Update()
@@ -140,6 +217,11 @@ public class GoldilocksZoneModel : MonoBehaviour
     public void SetStep(int step)
     {
         step = Mathf.Clamp(step, 1, StepCount);
+
+        // 값이 그대로여도 "신호가 들어왔다"는 사실 자체가 필요한 곳이 있다.
+        // 대기영상에서는 지구가 이미 그 자리에 있어도 D 신호가 오면 체험을 시작해야 한다.
+        OnStepSignal?.Invoke(step);
+
         if (step == CurrentStep) return;
 
         CurrentStep = step;
@@ -167,8 +249,8 @@ public class GoldilocksZoneModel : MonoBehaviour
 
     public ZoneState Evaluate(int step)
     {
-        if (step < Config.zoneMinStep) return ZoneState.TooHot;
-        if (step > Config.zoneMaxStep) return ZoneState.TooCold;
+        if (step < ZoneMinStep) return ZoneState.TooHot;
+        if (step > ZoneMaxStep) return ZoneState.TooCold;
         return ZoneState.Habitable;
     }
 

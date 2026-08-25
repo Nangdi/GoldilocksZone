@@ -16,16 +16,34 @@ public class ZoneDiscRenderer : MonoBehaviour
     public enum DiscBlendMode { Alpha, Additive }
 
     [Header("반지름 (태양 로컬 단위)")]
-    [Tooltip("원판 안쪽 반지름. 태양 표면이 0.5 이므로 그보다 안쪽은 어차피 태양에 가려진다.")]
-    [SerializeField] private float innerRadius = 0.5f;
+    [Tooltip("원판 메시가 시작하는 반지름. 태양 표면(0.5)보다 안쪽에서 시작해야 " +
+             "태양에 가려진 채로 서서히 나타난다. 0 으로 두면 중심에 겹친 정점이 생기므로 조금 띄운다.")]
+    [SerializeField] private float innerRadius = 0.1f;
     [Tooltip("마지막 단계 바깥으로 얼마나 더 그릴지(단계 단위). 0.5 면 D9.5 까지 그린다.")]
     [SerializeField] private float outerMarginStep = 0.5f;
+
+    [Header("태양 경계 블렌딩")]
+    [Tooltip("태양 표면의 반지름. 태양은 반지름 0.5 인 구를 스케일한 것이라 보통 0.5.")]
+    [SerializeField] private float sunSurfaceRadius = 0.5f;
+    [Tooltip("태양 표면에서 원판이 서서히 진해지는 폭(태양 로컬 단위). " +
+             "0 이면 태양 실루엣에서 원판이 딱 끊겨 경계선이 도드라진다.")]
+    [SerializeField] private float sunBlendWidth = 0.5f;
 
     [Header("메시")]
     [SerializeField, Range(24, 512)] private int segments = 128;
     [SerializeField, Range(1, 32)] private int radialSegments = 4;
-    [Tooltip("궤도면에서 살짝 띄우고 싶을 때 사용. 보통 0.")]
-    [SerializeField] private float localYOffset = 0f;
+    // 원판을 지구 아래로 살짝 내리는 이유:
+    // 지구는 queue 2450, 원판은 2990 이라 원판이 나중에 그려지고 ZWrite 도 꺼져 있다.
+    // 둘 다 로컬 y=0 이면 원판이 지구 앞쪽 절반 픽셀 위에 덧칠돼 지구가 반반으로 갈려 보인다.
+    // 지구 반지름보다 조금 더 내려 관통 자체를 없앤다.
+    [Tooltip("궤도면에서 원판을 얼마나 내릴지(태양 로컬 단위). 음수가 아래.")]
+    [SerializeField] private float localYOffset = -0.045f;
+    [Tooltip("켜면 지구 렌더러 크기를 재서 원판이 지구를 관통하지 않을 만큼 자동으로 내린다. " +
+             "localYOffset 은 무시된다.")]
+    [SerializeField] private bool autoClearEarth = true;
+    [Tooltip("지구 표면과 원판 사이에 남길 여유(지구 반지름 배수).")]
+    [SerializeField, Range(0f, 1f)] private float earthClearance = 0.25f;
+    [SerializeField] private string earthPath = "Actor/Universal Rendering Pipeline Materials/Sun Sphere/Earth";
 
     [Header("색")]
     [Tooltip("켜두면 골디락스 존 설정에서 그라데이션을 자동으로 만든다. 끄면 아래 gradient 를 손으로 편집한 그대로 사용한다.")]
@@ -58,6 +76,7 @@ public class ZoneDiscRenderer : MonoBehaviour
     private Material material;
     private Texture2D gradientTexture;
     private bool dirty = true;
+    private float planeOffsetY;
 
     // 마지막으로 만들어진 원판의 바깥 반지름(태양 로컬 단위)
     public float OuterRadius { get; private set; }
@@ -66,6 +85,21 @@ public class ZoneDiscRenderer : MonoBehaviour
     {
         meshFilter = GetComponent<MeshFilter>();
         meshRenderer = GetComponent<MeshRenderer>();
+        dirty = true;
+
+        // 태양 세기가 바뀌면 존 범위가 통째로 이동하므로 원판을 다시 굽는다.
+        var model = ResolveModel();
+        if (model != null) model.OnSunLevelChanged += OnSunLevelChanged;
+    }
+
+    private void OnDisable()
+    {
+        var model = GoldilocksZoneModel.Instance;
+        if (model != null) model.OnSunLevelChanged -= OnSunLevelChanged;
+    }
+
+    private void OnSunLevelChanged(int level)
+    {
         dirty = true;
     }
 
@@ -101,9 +135,33 @@ public class ZoneDiscRenderer : MonoBehaviour
         if (autoBuildGradient)
             gradient = BuildGradient(model, OuterRadius);
 
+        planeOffsetY = autoClearEarth ? -EarthClearOffset() : localYOffset;
+
         BuildMesh(innerRadius, OuterRadius);
         BuildTexture();
         BuildMaterial();
+    }
+
+    // 지구 렌더러의 월드 크기를 태양 로컬 단위로 환산해 반지름을 구한다.
+    // (지구 모델은 정확한 단위 구가 아니라서 스케일값만으로는 반지름을 알 수 없다.)
+    private float EarthClearOffset()
+    {
+        var go = GameObject.Find(earthPath);
+        if (go == null) return Mathf.Abs(localYOffset);
+
+        float worldRadius = 0f;
+        foreach (var r in go.GetComponentsInChildren<Renderer>())
+        {
+            // 지구를 감싼 글로우 파티클까지 포함하면 원판이 과하게 내려간다.
+            if (r is ParticleSystemRenderer) continue;
+            worldRadius = Mathf.Max(worldRadius, r.bounds.extents.y);
+        }
+        if (worldRadius <= 0f) return Mathf.Abs(localYOffset);
+
+        float scale = transform.lossyScale.y;
+        if (Mathf.Approximately(scale, 0f)) return Mathf.Abs(localYOffset);
+
+        return worldRadius / scale * (1f + earthClearance);
     }
 
     private GoldilocksZoneModel ResolveModel()
@@ -219,7 +277,7 @@ public class ZoneDiscRenderer : MonoBehaviour
             {
                 float angle = (float)s / seg * Mathf.PI * 2f;
                 int i = r * ringVerts + s;
-                verts[i] = new Vector3(Mathf.Cos(angle) * radius, localYOffset, Mathf.Sin(angle) * radius);
+                verts[i] = new Vector3(Mathf.Cos(angle) * radius, planeOffsetY, Mathf.Sin(angle) * radius);
                 uvs[i] = new Vector2(u, 0.5f);
                 normals[i] = Vector3.up;
             }
@@ -269,9 +327,22 @@ public class ZoneDiscRenderer : MonoBehaviour
             };
         }
 
+        // 태양 경계 페이드는 Gradient 키로 넣지 않고 여기서 알파에 곱한다.
+        // Gradient 는 색 키가 8개까지인데 존 색과 색상환 중간점으로 이미 다 차 있고,
+        // 이건 "존 색"이 아니라 태양에 가려 보이지 않는 구간을 지우는 마스크에 가깝다.
+        float uSunStart = sunSurfaceRadius / OuterRadius;
+        float uSunEnd = (sunSurfaceRadius + sunBlendWidth) / OuterRadius;
+        bool blendSun = sunBlendWidth > 0f && uSunEnd > uSunStart;
+
         var pixels = new Color[res];
         for (int i = 0; i < res; i++)
-            pixels[i] = gradient.Evaluate((float)i / (res - 1));
+        {
+            float u = (float)i / (res - 1);
+            Color c = gradient.Evaluate(u);
+            if (blendSun)
+                c.a *= Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(uSunStart, uSunEnd, u));
+            pixels[i] = c;
+        }
 
         gradientTexture.SetPixels(pixels);
         gradientTexture.Apply(false);

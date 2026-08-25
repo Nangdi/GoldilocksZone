@@ -51,6 +51,21 @@ public class TcpJson
     public bool appendOutgoingLineEnding = true;
 }
 
+// 태양 세기 1단계에 해당하는 설정.
+// 태양이 밝을수록 생물이 살 수 있는 구간이 바깥으로 밀려난다.
+[Serializable]
+public class SunLevelConfig
+{
+    public int level = 1;
+    // 이 세기에서의 골디락스 존 범위(양끝 포함)
+    public int zoneMinStep = 2;
+    public int zoneMaxStep = 4;
+    // 태양 Point Light 밝기. 0 이하이면 조명을 건드리지 않는다.
+    public float lightIntensity = 0.6f;
+    // 태양 글로우 파티클 크기 배율. 0 이하이면 건드리지 않는다.
+    public float glowScale = 0.8f;
+}
+
 [Serializable]
 public class GoldilocksJson
 {
@@ -64,7 +79,18 @@ public class GoldilocksJson
     // 시작할 때 지구를 놓아둘 단계
     public int initialStep = 1;
 
-    // 골디락스 존 범위(양끝 포함). 예) 4,6 이면 D4~D6 이 생물 거주 가능 구간
+    // 태양 세기 단계별 골디락스 존 범위. 세기가 올라갈수록 존이 바깥으로 밀려난다.
+    public List<SunLevelConfig> sunLevels = new List<SunLevelConfig>
+    {
+        new SunLevelConfig { level = 1, zoneMinStep = 2, zoneMaxStep = 4, lightIntensity = 0.6f, glowScale = 0.8f },
+        new SunLevelConfig { level = 2, zoneMinStep = 4, zoneMaxStep = 6, lightIntensity = 1.0f, glowScale = 1.0f },
+        new SunLevelConfig { level = 3, zoneMinStep = 6, zoneMaxStep = 8, lightIntensity = 1.6f, glowScale = 1.3f },
+    };
+
+    // 시작할 때의 태양 세기 단계
+    public int initialSunLevel = 2;
+
+    // sunLevels 가 비어 있거나 현재 단계를 찾지 못할 때 쓰는 예비 존 범위(양끝 포함)
     public int zoneMinStep = 4;
     public int zoneMaxStep = 6;
 
@@ -92,6 +118,31 @@ public class GoldilocksJson
     // Time.timeScale 영향을 받지 않게 할지 여부.
     // GameManager 가 매 프레임 timeScale 을 덮어쓰므로 기본 true 를 권장한다.
     public bool useUnscaledTime = true;
+
+    // ── 대기 / 인트로 ────────────────────────────────────────────
+    // 전시 흐름: 대기영상 -> (D 신호) -> 인트로 멘트 -> 체험 -> 무입력 -> 대기영상
+
+    // 체험이 끝나고 이 시간 동안 신호가 없으면 대기영상으로 돌아간다.
+    public float idleTimeoutSeconds = 30f;
+
+    // 대기영상 폴더. StreamingAssets/<videoRootFolder>/<이 이름>/ 안의 파일을 반복 재생한다.
+    public string idleVideoFolder = "idle";
+
+    // 인트로 멘트 한 줄이 머무는 시간(초)
+    public float introSecondsPerMessage = 3f;
+
+    // 멘트가 바뀔 때 흐려졌다 나타나는 시간(초)
+    public float introFadeSeconds = 0.4f;
+
+    // 인트로 멘트. 줄바꿈은 \n 으로 넣는다.
+    public List<string> introMessages = new List<string>
+    {
+        "밤하늘의 수많은 별 중에서, 우리 지구처럼 생명체가 살 수 있는 곳은 어디에 있을까요?",
+        "생명이 숨 쉬려면 단순히 따뜻한 것만으로는 부족해요.",
+        "온도를 지켜주는 마법의 물질인 '액체 상태의 물',",
+        "그리고 그 물이 도망가지 못하게 꽉 잡아주는 '대기'가 꼭 필요하답니다.",
+        "자, 이제 직접 지구 모형을 움직여서\n생명체가 살아갈 수 있는 위치인\n골디락스 존을 찾아보세요!",
+    };
 }
 
 public class JsonManager : MonoBehaviour

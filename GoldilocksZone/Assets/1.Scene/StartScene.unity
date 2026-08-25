@@ -1423,17 +1423,49 @@ MonoBehaviour:
     controllerId: 1
     stepCount: 9
     initialStep: 1
+    sunLevels:
+    - level: 1
+      zoneMinStep: 2
+      zoneMaxStep: 4
+      lightIntensity: 0.6
+      glowScale: 0.8
+    - level: 2
+      zoneMinStep: 4
+      zoneMaxStep: 6
+      lightIntensity: 1
+      glowScale: 1
+    - level: 3
+      zoneMinStep: 6
+      zoneMaxStep: 8
+      lightIntensity: 1.6
+      glowScale: 1.3
+    initialSunLevel: 2
     zoneMinStep: 4
     zoneMaxStep: 6
     fadeWidthStep: 1
-    auAtMinStep: 0.6
-    auAtMaxStep: 1.6
     moveSmoothTime: 0.35
     arriveEpsilon: 0.005
     settleDelay: 1
     waitForArrival: 1
     ignoreSameAsLastSettled: 0
     useUnscaledTime: 1
+    idleTimeoutSeconds: 30
+    idleVideoFolder: idle
+    introSecondsPerMessage: 3
+    introFadeSeconds: 0.4
+    introMessages:
+    - "\uBC24\uD558\uB298\uC758 \uC218\uB9CE\uC740 \uBCC4 \uC911\uC5D0\uC11C, \uC6B0\uB9AC
+      \uC9C0\uAD6C\uCC98\uB7FC \uC0DD\uBA85\uCCB4\uAC00 \uC0B4 \uC218 \uC788\uB294
+      \uACF3\uC740 \uC5B4\uB514\uC5D0 \uC788\uC744\uAE4C\uC694?"
+    - "\uC0DD\uBA85\uC774 \uC228 \uC26C\uB824\uBA74 \uB2E8\uC21C\uD788 \uB530\uB73B\uD55C
+      \uAC83\uB9CC\uC73C\uB85C\uB294 \uBD80\uC871\uD574\uC694."
+    - "\uC628\uB3C4\uB97C \uC9C0\uCF1C\uC8FC\uB294 \uB9C8\uBC95\uC758 \uBB3C\uC9C8\uC778
+      '\uC561\uCCB4 \uC0C1\uD0DC\uC758 \uBB3C',"
+    - "\uADF8\uB9AC\uACE0 \uADF8 \uBB3C\uC774 \uB3C4\uB9DD\uAC00\uC9C0 \uBABB\uD558\uAC8C
+      \uAF49 \uC7A1\uC544\uC8FC\uB294 '\uB300\uAE30'\uAC00 \uAF2D \uD544\uC694\uD558\uB2F5\uB2C8\uB2E4."
+    - "\uC790, \uC774\uC81C \uC9C1\uC811 \uC9C0\uAD6C \uBAA8\uD615\uC744 \uC6C0\uC9C1\uC5EC\uC11C\n\uC0DD\uBA85\uCCB4\uAC00
+      \uC0B4\uC544\uAC08 \uC218 \uC788\uB294 \uC704\uCE58\uC778\n\uACE8\uB514\uB77D\uC2A4
+      \uC874\uC744 \uCC3E\uC544\uBCF4\uC138\uC694!"
 --- !u!114 &956986025
 MonoBehaviour:
   m_ObjectHideFlags: 0
@@ -1443,9 +1475,10 @@ MonoBehaviour:
   m_GameObject: {fileID: 956986021}
   m_Enabled: 1
   m_EditorHideFlags: 0
-  m_Script: {fileID: 11500000, guid: 0badad1b0f15c5f4c8c9624d3869d603, type: 3}
+  m_Script: {fileID: 11500000, guid: 3f1f8d7b3ac01cd4c9c6e653df65f4de, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
+  verboseLog: 1
 --- !u!1 &967787998
 GameObject:
   m_ObjectHideFlags: 0
@@ -2033,11 +2066,16 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: b05b6c38bb4d8cd43b91ed532dc8f620, type: 3}
   m_Name: 
   m_EditorClassIdentifier: 
-  innerRadius: 0.5
+  innerRadius: 0.1
   outerMarginStep: 0.5
+  sunSurfaceRadius: 0.5
+  sunBlendWidth: 0.3
   segments: 128
   radialSegments: 4
   localYOffset: 0
+  autoClearEarth: 1
+  earthClearance: 0.25
+  earthPath: Actor/Universal Rendering Pipeline Materials/Sun Sphere/Earth
   autoBuildGradient: 1
   hotColor: {r: 1, g: 0.24, b: 0.14, a: 0.33}
   habitableColor: {r: 0.25, g: 1, b: 0.42, a: 0.33}
@@ -2172,31 +2210,31 @@ PrefabInstance:
       objectReference: {fileID: 0}
     - target: {fileID: 4538169596089768, guid: ec1861462fc1b46f1a1c1c3c0f1f7f15, type: 3}
       propertyPath: m_LocalRotation.w
-      value: 0.9929713
+      value: 0.98934436
       objectReference: {fileID: 0}
     - target: {fileID: 4538169596089768, guid: ec1861462fc1b46f1a1c1c3c0f1f7f15, type: 3}
       propertyPath: m_LocalRotation.x
-      value: 0.00054515235
+      value: -0.08479374
       objectReference: {fileID: 0}
     - target: {fileID: 4538169596089768, guid: ec1861462fc1b46f1a1c1c3c0f1f7f15, type: 3}
       propertyPath: m_LocalRotation.y
-      value: 0.11162782
+      value: 0.107834585
       objectReference: {fileID: 0}
     - target: {fileID: 4538169596089768, guid: ec1861462fc1b46f1a1c1c3c0f1f7f15, type: 3}
       propertyPath: m_LocalRotation.z
-      value: 0.039332043
+      value: 0.04877992
       objectReference: {fileID: 0}
     - target: {fileID: 4538169596089768, guid: ec1861462fc1b46f1a1c1c3c0f1f7f15, type: 3}
       propertyPath: m_LocalEulerAnglesHint.x
-      value: -0.441
+      value: -10.271
       objectReference: {fileID: 0}
     - target: {fileID: 4538169596089768, guid: ec1861462fc1b46f1a1c1c3c0f1f7f15, type: 3}
       propertyPath: m_LocalEulerAnglesHint.y
-      value: 12.811
+      value: 12.031
       objectReference: {fileID: 0}
     - target: {fileID: 4538169596089768, guid: ec1861462fc1b46f1a1c1c3c0f1f7f15, type: 3}
       propertyPath: m_LocalEulerAnglesHint.z
-      value: 4.487
+      value: 4.56
       objectReference: {fileID: 0}
     - target: {fileID: 4538169596089768, guid: ec1861462fc1b46f1a1c1c3c0f1f7f15, type: 3}
       propertyPath: m_ConstrainProportionsScale
@@ -2565,6 +2603,8 @@ MonoBehaviour:
   enableKeyboard: 1
   randomKey: 113
   avoidSameStep: 1
+  shiftNumberSetsSunLevel: 1
+  sunLevelKeys: 7a0000007800000063000000
 --- !u!1 &1910183670
 GameObject:
   m_ObjectHideFlags: 0
@@ -2578,6 +2618,9 @@ GameObject:
   - component: {fileID: 1910183672}
   - component: {fileID: 1904290912}
   - component: {fileID: 1910183671}
+  - component: {fileID: 1910183675}
+  - component: {fileID: 1910183676}
+  - component: {fileID: 1910183677}
   m_Layer: 0
   m_Name: Goldilocks
   m_TagString: Untagged
@@ -2649,6 +2692,159 @@ Transform:
   m_Children: []
   m_Father: {fileID: 0}
   m_LocalEulerAnglesHint: {x: 0, y: 0, z: 0}
+--- !u!114 &1910183675
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1910183670}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 665f6a60209c91b4b9ef59a482d27f95, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  sunLight: {fileID: 0}
+  sunLightPath: Actor/Universal Rendering Pipeline Materials/Sun Sphere/Point Light
+  sunGlow: {fileID: 0}
+  sunGlowPath: Actor/Universal Rendering Pipeline Materials/Sun Sphere/Sun Glow
+  transitionSeconds: 0.6
+--- !u!114 &1910183676
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1910183670}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 66331378a4ca0b049ac672f4f9a49a55, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  targetCamera: {fileID: 0}
+  planet: {fileID: 0}
+  planetPath: Actor/Universal Rendering Pipeline Materials/Sun Sphere/Earth
+  playOnSettle: 1
+  enableDirector: 1
+  anticipateSeconds: 0.45
+  diveSeconds: 2.6
+  whiteoutSeconds: 0.5
+  returnSeconds: 1.3
+  surfaceStopRadiusScale: 1.6
+  anticipatePullback: 0.07
+  arcUp: 0.1
+  arcSide: 0.16
+  anticipateFovKick: 7
+  endFov: 32
+  rollDegrees: 1
+  shakeAmount: 0.0117
+  shakeFrequency: 7
+  diveEase:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0.15
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.6
+      value: 0.28
+      inSlope: 0.95
+      outSlope: 0.95
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 2.2
+      outSlope: 2.2
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  lookEase:
+    serializedVersion: 2
+    m_Curve:
+    - serializedVersion: 3
+      time: 0
+      value: 0
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 0.5
+      value: 0.85
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    - serializedVersion: 3
+      time: 1
+      value: 1
+      inSlope: 0
+      outSlope: 0
+      tangentMode: 0
+      weightedMode: 0
+      inWeight: 0
+      outWeight: 0
+    m_PreInfinity: 2
+    m_PostInfinity: 2
+    m_RotationOrder: 4
+  useVignette: 1
+  vignetteIntensity: 0.5
+  useMotionBlur: 1
+  motionBlurIntensity: 0.65
+  flashColor: {r: 1, g: 1, b: 1, a: 1}
+  videoRootFolder: video
+  pickRandomWhenMultiple: 0
+  loopVideo: 0
+  returnWhenVideoEnds: 1
+  videoVolume: 1
+  logVideoScan: 1
+  surfaceByStep: []
+  surfaceByZone:
+  - {fileID: 0}
+  - {fileID: 0}
+  - {fileID: 0}
+  overlayCanvas: {fileID: 0}
+  flashImage: {fileID: 0}
+  surfaceImage: {fileID: 0}
+  videoImage: {fileID: 0}
+--- !u!114 &1910183677
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 1910183670}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: b800257c3db733c4fa90624ca5215336, type: 3}
+  m_Name: 
+  m_EditorClassIdentifier: 
+  diveDirector: {fileID: 1910183676}
+  messageFont: {fileID: 11400000, guid: 838ba79012aca73418bdba3ae58adf47, type: 2}
+  messageFontSize: 46
+  dimAlpha: 0.72
+  messageSideMargin: 260
+  autoPlayAfterIntro: 0
+  verboseLog: 1
+  skipAttractOnStart: 0
 --- !u!1 &1932125298
 GameObject:
   m_ObjectHideFlags: 0
