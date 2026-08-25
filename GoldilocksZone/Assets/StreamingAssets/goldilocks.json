@@ -1,0 +1,14 @@
+{
+    "controllerId": 1,
+    "stepCount": 9,
+    "initialStep": 1,
+    "zoneMinStep": 4,
+    "zoneMaxStep": 6,
+    "fadeWidthStep": 1.0,
+    "moveSmoothTime": 0.3499999940395355,
+    "arriveEpsilon": 0.004999999888241291,
+    "settleDelay": 1.0,
+    "waitForArrival": true,
+    "ignoreSameAsLastSettled": false,
+    "useUnscaledTime": true
+}
