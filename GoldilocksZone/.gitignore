@@ -86,3 +86,7 @@ crashlytics-build.properties
 /[Aa]ssets/[Ss]treamingAssets/video/**/*.m4v.meta
 /[Aa]ssets/[Ss]treamingAssets/video/**/*.webm.meta
 /[Aa]ssets/[Ss]treamingAssets/video/**/*.avi.meta
+
+# Windows 탐색기 썸네일 캐시 (Unity 가 .meta 까지 만든다)
+Thumbs.db
+Thumbs.db.meta

@@ -9,8 +9,12 @@ using UnityEngine.Video;
 // 지구가 자리를 잡으면(OnStepSettled) 카메라가 행성 표면으로 빨려들어가고,
 // 화이트아웃 뒤에서 행성 표면 이미지로 바뀌는 연출을 담당한다.
 //
+// 기본값은 simpleZoom = true. 행성을 향해 곧게 다가가며 FOV 만 좁히는 담백한 줌인이다.
+// 전시장에서 연출이 과하다는 판단이 있어 곁가지를 접어두었다.
+//
+// simpleZoom 을 끄면 아래의 강한 연출이 살아난다.
 // 등속 이동이 밋밋한 이유는 모든 변화가 같은 타이밍에 같은 속도로 일어나기 때문이다.
-// 여기서는 서로 다른 곡선을 가진 요소들을 겹쳐 쌓는다.
+// 그때는 서로 다른 곡선을 가진 요소들을 겹쳐 쌓는다.
 //   예비 동작  - 들어가기 전 살짝 뒤로 물러나며 시야가 넓어진다(웅크렸다 튀어나가는 동작).
 //   곡선 경로  - 직선이 아니라 2차 베지어로 휘어 들어가 시차가 생긴다.
 //   가속 이징  - 뒤로 갈수록 빨라져 빨려드는 느낌을 만든다.
@@ -38,8 +42,16 @@ public class PlanetDiveDirector : MonoBehaviour
     [Tooltip("연출 없이 확인만 하고 싶을 때 끈다.")]
     [SerializeField] private bool enableDirector = true;
 
+    [Header("연출 강도")]
+    [Tooltip("켜면 곁가지를 모두 빼고 행성으로 곧게 다가가는 줌인만 남긴다. " +
+             "예비 동작 / 곡선 경로 / 가속 이징 / 롤 / 흔들림 / 모션 블러를 쓰지 않는다. " +
+             "끄면 아래 경로·흔들림·이징 값이 그대로 살아난다.")]
+    [SerializeField] private bool simpleZoom = true;
+    [Tooltip("간단 줌인일 때 비네트를 얼마나 약하게 쓸지(원래 값 대비 배율). 0 이면 비네트도 끈다.")]
+    [SerializeField, Range(0f, 1f)] private float simpleVignetteScale = 0.35f;
+
     [Header("타이밍(초)")]
-    [Tooltip("들어가기 전 뒤로 물러나며 숨을 고르는 시간")]
+    [Tooltip("들어가기 전 뒤로 물러나며 숨을 고르는 시간. simpleZoom 이 켜져 있으면 건너뛴다.")]
     [SerializeField] private float anticipateSeconds = 0.45f;
     [SerializeField] private float diveSeconds = 2.6f;
     [SerializeField] private float whiteoutSeconds = 0.5f;
@@ -94,10 +106,15 @@ public class PlanetDiveDirector : MonoBehaviour
 
     // 영상은 프로젝트에 임포트하지 않고 StreamingAssets 에서 읽는다.
     // 빌드 후에도 폴더에 파일만 갈아 끼우면 되므로 현장에서 영상 교체가 쉽다.
-    //   StreamingAssets/video/1/...  ~  StreamingAssets/video/9/...
-    [Header("영상 (StreamingAssets/video/<단계>/ 안의 파일)")]
+    // 단계(D1~D9) x 태양 세기(1~3) = 27 개를 각각 다른 폴더에 둔다.
+    //   StreamingAssets/video/<단계>/<태양세기>/...   예) video/5/2/  -> D5, 태양 세기 2
+    // 태양 세기 폴더가 비어 있으면 단계 폴더에 바로 놓인 파일(video/<단계>/...)을 공통으로 쓴다.
+    [Header("영상 (StreamingAssets/video/<단계>/<태양세기>/ 안의 파일)")]
     [Tooltip("StreamingAssets 아래의 영상 루트 폴더 이름")]
     [SerializeField] private string videoRootFolder = "video";
+    [Tooltip("영상 재생 중에 태양 세기가 바뀌면 원래 시점으로 돌아갔다가 바뀐 세기의 영상으로 다시 연출한다. " +
+             "끄면 재생 중인 영상을 그대로 둔다.")]
+    [SerializeField] private bool restartOnSunLevelChange = true;
     [Tooltip("한 폴더에 여러 개가 있을 때 무작위로 고른다. 끄면 이름순 첫 번째를 쓴다.")]
     [SerializeField] private bool pickRandomWhenMultiple = false;
     [Tooltip("반복 재생한다. 끄면 한 번 재생하고 끝난 뒤 원래 시점으로 돌아간다.")]
@@ -119,6 +136,10 @@ public class PlanetDiveDirector : MonoBehaviour
     [SerializeField] private Image flashImage;
     [SerializeField] private Image surfaceImage;
     [SerializeField] private RawImage videoImage;
+    [Tooltip("영상을 그릴 RenderTexture. 비워두면 영상 크기에 맞춰 런타임에 만든다.")]
+    [SerializeField] private RenderTexture videoTexture;
+    [Tooltip("표면 영상 재생기. 비워두면 이 오브젝트에 붙인다.")]
+    [SerializeField] private VideoPlayer videoPlayer;
 
     private GoldilocksZoneModel model;
 
@@ -147,7 +168,8 @@ public class PlanetDiveDirector : MonoBehaviour
     private bool divePending;
     private bool revealed;
 
-    private VideoPlayer videoPlayer;
+    private bool runtimeVideoTexture;   // videoTexture 를 우리가 만들었는지(정리 책임)
+    // 키는 VideoKey(단계, 태양세기). 태양세기 0 은 단계 폴더에 바로 놓인 공통 영상이다.
     private Dictionary<int, List<string>> videoPaths;
     private string currentVideoPath;
 
@@ -195,6 +217,7 @@ public class PlanetDiveDirector : MonoBehaviour
 
         model.OnStepSettled += OnStepSettled;
         model.OnStepChanged += OnStepChanged;
+        model.OnSunLevelChanged += OnSunLevelChanged;
     }
 
     private void OnDestroy()
@@ -203,9 +226,15 @@ public class PlanetDiveDirector : MonoBehaviour
         {
             model.OnStepSettled -= OnStepSettled;
             model.OnStepChanged -= OnStepChanged;
+            model.OnSunLevelChanged -= OnSunLevelChanged;
         }
         if (runtimeVolume != null) Destroy(runtimeVolume.gameObject);
         if (runtimeProfile != null) Destroy(runtimeProfile);
+        if (runtimeVideoTexture && videoTexture != null)
+        {
+            videoTexture.Release();
+            Destroy(videoTexture);
+        }
     }
 
     private void OnStepSettled(int step)
@@ -229,12 +258,38 @@ public class PlanetDiveDirector : MonoBehaviour
         StartReturn();
     }
 
+    // 태양 세기가 바뀌면 같은 단계라도 틀어야 할 영상이 달라진다.
+    // 단계는 그대로라 정착 신호가 다시 오지 않으므로, 복귀 뒤 이어서 연출하도록 직접 예약한다.
+    private void OnSunLevelChanged(int level)
+    {
+        if (!enableDirector || !restartOnSunLevelChange) return;
+        if (phase == Phase.Idle) return;
+
+        divePending = true;
+        if (phase != Phase.Return) StartReturn();
+    }
+
     [ContextMenu("연출 시작")]
     public void StartDive()
     {
         if (phase != Phase.Idle) return;
 
         CaptureHomePose();
+
+        phaseTime = 0f;
+        noiseSeed = Random.value * 100f;
+        divePending = false;
+        revealed = false;
+
+        // 영상은 미리 준비해 둔다. 도착까지 2초 넘게 걸리므로 그 사이에 디코딩이 끝난다.
+        PrepareVideoFor(model.CurrentStep, model.SunLevel);
+
+        // 간단 줌인에서는 웅크렸다 튀어나가는 예비 동작 없이 곧바로 다가간다.
+        if (simpleZoom)
+        {
+            BeginDive();
+            return;
+        }
 
         // 예비 동작: 행성 반대 방향으로 살짝 물러난다.
         Vector3 planetCenter = planet.position;
@@ -245,13 +300,6 @@ public class PlanetDiveDirector : MonoBehaviour
         anticipateTo = homePosition + away * (distance * anticipatePullback);
 
         phase = Phase.Anticipate;
-        phaseTime = 0f;
-        noiseSeed = Random.value * 100f;
-        divePending = false;
-        revealed = false;
-
-        // 영상은 미리 준비해 둔다. 도착까지 3초 넘게 걸리므로 그 사이에 디코딩이 끝난다.
-        PrepareVideoFor(model.CurrentStep);
     }
 
     [ContextMenu("원래 시점으로")]
@@ -283,7 +331,7 @@ public class PlanetDiveDirector : MonoBehaviour
             case Phase.Anticipate: TickAnticipate(); break;
             case Phase.Dive: TickDive(); break;
             case Phase.Whiteout: TickWhiteout(); break;
-            case Phase.Surface: TickSurface(); break;
+            // Surface: 영상/이미지를 띄운 채 다음 신호를 기다린다. 영상은 RenderTexture 로 알아서 그려진다.
             case Phase.Return: TickReturn(); break;
         }
     }
@@ -318,9 +366,13 @@ public class PlanetDiveDirector : MonoBehaviour
         if (side.sqrMagnitude < 0.0001f) side = Vector3.right;
         side.Normalize();
 
+        // 간단 줌인이면 제어점을 정확히 중점에 둔다. 2차 베지어는 이때 직선과 같아진다.
+        float up = simpleZoom ? 0f : arcUp;
+        float lateral = simpleZoom ? 0f : arcSide;
+
         p0 = start;
         p2 = end;
-        p1 = (start + end) * 0.5f + Vector3.up * (distance * arcUp) + side * (distance * arcSide);
+        p1 = (start + end) * 0.5f + Vector3.up * (distance * up) + side * (distance * lateral);
 
         diveStartRotation = targetCamera.transform.rotation;
         diveStartFov = targetCamera.fieldOfView;
@@ -333,16 +385,21 @@ public class PlanetDiveDirector : MonoBehaviour
     {
         float t = Clamp01Progress(diveSeconds);
 
-        float moveT = diveEase.Evaluate(t);
+        // 간단 줌인은 가속 없이 부드럽게 출발해 부드럽게 멎는다(SmoothStep).
+        // diveEase 는 끝으로 갈수록 가팔라져 "빨려든다"는 인상을 만드는 곡선이라 여기서는 쓰지 않는다.
+        float moveT = simpleZoom ? Mathf.SmoothStep(0f, 1f, t) : diveEase.Evaluate(t);
         Vector3 pos = Bezier(p0, p1, p2, moveT);
 
-        // 흔들림은 남은 거리에 비례시켜, 가까워질수록 화면에서 차지하는 비중이 일정하게 보이도록 한다.
-        float remaining = Vector3.Distance(pos, planet.position);
-        float shake = shakeAmount * remaining * Mathf.Sin(t * Mathf.PI);   // 중간에 최대
-        pos += new Vector3(
-            (Mathf.PerlinNoise(noiseSeed, phaseTime * shakeFrequency) - 0.5f),
-            (Mathf.PerlinNoise(noiseSeed + 13f, phaseTime * shakeFrequency) - 0.5f),
-            (Mathf.PerlinNoise(noiseSeed + 27f, phaseTime * shakeFrequency) - 0.5f)) * (shake * 2f);
+        if (!simpleZoom)
+        {
+            // 흔들림은 남은 거리에 비례시켜, 가까워질수록 화면에서 차지하는 비중이 일정하게 보이도록 한다.
+            float remaining = Vector3.Distance(pos, planet.position);
+            float shake = shakeAmount * remaining * Mathf.Sin(t * Mathf.PI);   // 중간에 최대
+            pos += new Vector3(
+                (Mathf.PerlinNoise(noiseSeed, phaseTime * shakeFrequency) - 0.5f),
+                (Mathf.PerlinNoise(noiseSeed + 13f, phaseTime * shakeFrequency) - 0.5f),
+                (Mathf.PerlinNoise(noiseSeed + 27f, phaseTime * shakeFrequency) - 0.5f)) * (shake * 2f);
+        }
 
         targetCamera.transform.position = pos;
 
@@ -351,7 +408,8 @@ public class PlanetDiveDirector : MonoBehaviour
         Quaternion rot = Quaternion.Slerp(diveStartRotation, look, lookEase.Evaluate(t));
 
         // 롤은 들어갔다 나오며 0 으로 복귀한다.
-        rot *= Quaternion.AngleAxis(Mathf.Sin(t * Mathf.PI) * rollDegrees, Vector3.forward);
+        if (!simpleZoom)
+            rot *= Quaternion.AngleAxis(Mathf.Sin(t * Mathf.PI) * rollDegrees, Vector3.forward);
         targetCamera.transform.rotation = rot;
 
         targetCamera.fieldOfView = Mathf.Lerp(diveStartFov, endFov, moveT);
@@ -416,8 +474,7 @@ public class PlanetDiveDirector : MonoBehaviour
         SetAlpha(videoImage, 0f);
         SetEffectWeight(0f);
 
-        if (videoPlayer != null && videoPlayer.isPlaying) videoPlayer.Stop();
-        if (videoImage != null) videoImage.texture = null;
+        StopVideo();
 
         phase = Phase.Idle;
 
@@ -429,26 +486,13 @@ public class PlanetDiveDirector : MonoBehaviour
         }
     }
 
-    // 표면 이미지를 띄운 채 다음 신호를 기다린다.
-    // VideoPlayer.texture 는 첫 프레임이 나온 뒤에야 생기므로 그때 붙인다.
-    private void TickSurface()
-    {
-        if (videoImage == null || videoPlayer == null) return;
-        if (videoImage.texture == null && videoPlayer.texture != null)
-            videoImage.texture = videoPlayer.texture;
-    }
-
     private void ShowContent()
     {
         // 영상이 있으면 영상을 우선한다.
         if (videoPlayer != null && !string.IsNullOrEmpty(currentVideoPath))
         {
             videoPlayer.Play();
-            if (videoImage != null)
-            {
-                videoImage.texture = videoPlayer.texture;
-                SetAlpha(videoImage, 1f);
-            }
+            SetAlpha(videoImage, 1f);
             return;
         }
 
@@ -462,13 +506,12 @@ public class PlanetDiveDirector : MonoBehaviour
             : new Color(0.12f, 0.14f, 0.18f, 1f);
     }
 
-    private void PrepareVideoFor(int step)
+    private void PrepareVideoFor(int step, int sunLevel)
     {
         currentVideoPath = null;
-        if (videoImage != null) videoImage.texture = null;
         if (videoPlayer == null) return;
 
-        currentVideoPath = PickVideoPath(step);
+        currentVideoPath = PickVideoPath(step, sunLevel);
         if (string.IsNullOrEmpty(currentVideoPath))
         {
             videoPlayer.url = string.Empty;
@@ -481,17 +524,32 @@ public class PlanetDiveDirector : MonoBehaviour
         videoPlayer.Prepare();
     }
 
-    private string PickVideoPath(int step)
+    // 태양 세기 폴더의 영상을 먼저 찾고, 없으면 단계 폴더의 공통 영상으로 물러난다.
+    private string PickVideoPath(int step, int sunLevel)
     {
-        List<string> files;
-        if (videoPaths == null || !videoPaths.TryGetValue(step, out files) || files.Count == 0)
-            return null;
+        List<string> files = FindVideoList(step, sunLevel);
+        if (files == null) files = FindVideoList(step, 0);
+        if (files == null) return null;
 
         if (files.Count == 1) return files[0];
         return pickRandomWhenMultiple ? files[Random.Range(0, files.Count)] : files[0];
     }
 
-    // StreamingAssets/video/<단계>/ 를 훑어 단계별 영상 목록을 만든다.
+    private List<string> FindVideoList(int step, int sunLevel)
+    {
+        List<string> files;
+        if (videoPaths == null || !videoPaths.TryGetValue(VideoKey(step, sunLevel), out files) || files.Count == 0)
+            return null;
+        return files;
+    }
+
+    private static int VideoKey(int step, int sunLevel)
+    {
+        return step * 100 + sunLevel;
+    }
+
+    // StreamingAssets/video/<단계>/<태양세기>/ 를 훑어 단계·세기별 영상 목록을 만든다.
+    // 단계 폴더에 바로 놓인 파일은 세기 0(공통)으로 넣어 두고, 세기 폴더가 비었을 때 대신 쓴다.
     // 재생 직전이 아니라 시작할 때 한 번 훑어서, 연출 도중에 디스크를 건드리지 않는다.
     [ContextMenu("영상 폴더 다시 스캔")]
     public void ScanVideoFolders()
@@ -506,24 +564,39 @@ public class PlanetDiveDirector : MonoBehaviour
         }
 
         int steps = model != null ? model.StepCount : 9;
+        int sunLevels = model != null ? model.SunLevelCount : 3;
         var found = new System.Text.StringBuilder();
+        int stepsWithVideo = 0;
 
         for (int step = 1; step <= steps; step++)
         {
-            string dir = Path.Combine(root, step.ToString());
-            if (!Directory.Exists(dir)) continue;
+            string stepDir = Path.Combine(root, step.ToString());
+            if (!Directory.Exists(stepDir)) continue;
 
-            var list = new List<string>();
-            foreach (string file in Directory.GetFiles(dir))
+            var line = new System.Text.StringBuilder();
+
+            for (int level = 1; level <= sunLevels; level++)
             {
-                // StreamingAssets 안에도 .meta 가 생기므로 확장자로 걸러야 한다.
-                if (IsVideoFile(file)) list.Add(file);
-            }
-            if (list.Count == 0) continue;
+                string dir = Path.Combine(stepDir, level.ToString());
+                if (!Directory.Exists(dir)) continue;
 
-            list.Sort(System.StringComparer.OrdinalIgnoreCase);
-            videoPaths[step] = list;
-            found.Append($"  D{step}: {list.Count}개 ({Path.GetFileName(list[0])}{(list.Count > 1 ? " 외" : "")})\n");
+                List<string> list = CollectVideoFiles(dir);
+                if (list == null) continue;
+
+                videoPaths[VideoKey(step, level)] = list;
+                line.Append($" 세기{level}={list.Count}개");
+            }
+
+            List<string> common = CollectVideoFiles(stepDir);
+            if (common != null)
+            {
+                videoPaths[VideoKey(step, 0)] = common;
+                line.Append($" 공통={common.Count}개({Path.GetFileName(common[0])})");
+            }
+
+            if (line.Length == 0) continue;
+            stepsWithVideo++;
+            found.Append($"  D{step}:{line}\n");
         }
 
         if (!logVideoScan) return;
@@ -531,7 +604,22 @@ public class PlanetDiveDirector : MonoBehaviour
         if (videoPaths.Count == 0)
             Debug.LogWarning($"[Goldilocks] {root} 아래에서 재생할 영상을 찾지 못했습니다.");
         else
-            Debug.Log($"[Goldilocks] 영상 {videoPaths.Count}개 단계 발견\n{found}");
+            Debug.Log($"[Goldilocks] 영상 폴더 {videoPaths.Count}개 / 단계 {stepsWithVideo}개 발견\n{found}");
+    }
+
+    // 폴더 바로 아래의 영상 파일만 이름순으로 모은다. 없으면 null.
+    private static List<string> CollectVideoFiles(string dir)
+    {
+        var list = new List<string>();
+        foreach (string file in Directory.GetFiles(dir))
+        {
+            // StreamingAssets 안에도 .meta 가 생기므로 확장자로 걸러야 한다.
+            if (IsVideoFile(file)) list.Add(file);
+        }
+        if (list.Count == 0) return null;
+
+        list.Sort(System.StringComparer.OrdinalIgnoreCase);
+        return list;
     }
 
     private static bool IsVideoFile(string path)
@@ -599,20 +687,26 @@ public class PlanetDiveDirector : MonoBehaviour
     // 우선순위가 더 높은 런타임 볼륨을 따로 만들어 덧씌운다.
     private void EnsureVolume()
     {
-        if (!useVignette && !useMotionBlur) return;
+        // 모션 블러는 "빨려든다"는 인상을 만드는 핵심이라 간단 줌인에서는 아예 만들지 않는다.
+        // 비네트는 화면을 정리해 주는 쪽에 가까워서 약하게 남긴다.
+        float vignetteValue = simpleZoom ? vignetteIntensity * simpleVignetteScale : vignetteIntensity;
+        bool wantVignette = useVignette && vignetteValue > 0f;
+        bool wantMotionBlur = useMotionBlur && !simpleZoom;
+
+        if (!wantVignette && !wantMotionBlur) return;
 
         runtimeProfile = ScriptableObject.CreateInstance<VolumeProfile>();
         runtimeProfile.hideFlags = HideFlags.DontSave;
 
-        if (useVignette)
+        if (wantVignette)
         {
             vignette = runtimeProfile.Add<Vignette>(true);
             vignette.intensity.overrideState = true;
-            vignette.intensity.value = vignetteIntensity;
+            vignette.intensity.value = vignetteValue;
             vignette.smoothness.overrideState = true;
             vignette.smoothness.value = 0.6f;
         }
-        if (useMotionBlur)
+        if (wantMotionBlur)
         {
             motionBlur = runtimeProfile.Add<MotionBlur>(true);
             motionBlur.intensity.overrideState = true;
@@ -630,22 +724,26 @@ public class PlanetDiveDirector : MonoBehaviour
         runtimeVolume.weight = 0f;
     }
 
-    // APIOnly 로 두면 RenderTexture 를 직접 관리하지 않고 videoPlayer.texture 를 그대로 쓸 수 있다.
+    // 영상은 RenderTexture 에 그리고, UGUI RawImage 가 그 텍스처를 화면에 띄운다.
     private void EnsureVideoPlayer()
     {
-        if (videoPlayer != null) return;
+        if (videoPlayer == null) videoPlayer = gameObject.AddComponent<VideoPlayer>();
 
-        videoPlayer = gameObject.AddComponent<VideoPlayer>();
         videoPlayer.playOnAwake = false;
-        videoPlayer.renderMode = VideoRenderMode.APIOnly;
+        videoPlayer.renderMode = VideoRenderMode.RenderTexture;
         videoPlayer.audioOutputMode = VideoAudioOutputMode.Direct;   // AudioSource 없이 바로 출력
         videoPlayer.waitForFirstFrame = true;
         videoPlayer.isLooping = loopVideo;
         videoPlayer.skipOnDrop = true;
 
-        // 오디오 트랙 수는 준비가 끝나야 알 수 있다.
+        // 재생 전에 그릴 곳이 있어야 한다. 크기는 준비가 끝나면 영상에 맞춰 다시 잡는다.
+        if (videoTexture != null) BindVideoTexture(videoTexture);
+        else EnsureVideoTexture(1920, 1080);
+
+        // 영상 크기와 오디오 트랙 수는 준비가 끝나야 알 수 있다.
         videoPlayer.prepareCompleted += vp =>
         {
+            EnsureVideoTexture((int)vp.width, (int)vp.height);
             for (ushort i = 0; i < vp.audioTrackCount; i++)
                 vp.SetDirectAudioVolume(i, videoVolume);
         };
@@ -667,6 +765,49 @@ public class PlanetDiveDirector : MonoBehaviour
         };
     }
 
+    // 영상 크기에 맞는 RenderTexture 를 준비한다. 인스펙터에서 지정한 것이 있으면 그대로 쓴다.
+    private void EnsureVideoTexture(int width, int height)
+    {
+        if (width <= 0 || height <= 0) return;
+        if (videoTexture != null && videoTexture.width == width && videoTexture.height == height) return;
+        if (videoTexture != null && !runtimeVideoTexture) return;   // 인스펙터 지정분은 크기를 바꾸지 않는다
+
+        if (runtimeVideoTexture && videoTexture != null)
+        {
+            videoTexture.Release();
+            Destroy(videoTexture);
+        }
+
+        videoTexture = new RenderTexture(width, height, 0, RenderTextureFormat.ARGB32);
+        videoTexture.name = "SurfaceVideoRT";
+        videoTexture.Create();
+        runtimeVideoTexture = true;
+        BindVideoTexture(videoTexture);
+    }
+
+    private void BindVideoTexture(RenderTexture rt)
+    {
+        if (videoPlayer != null) videoPlayer.targetTexture = rt;
+        if (videoImage != null) videoImage.texture = rt;
+        ClearVideoTexture();
+    }
+
+    // 멈춘 뒤 마지막 프레임이 남아 있으면 다음 연출에서 그 장면이 먼저 비친다. 검게 지운다.
+    private void ClearVideoTexture()
+    {
+        if (videoTexture == null) return;
+        var prev = RenderTexture.active;
+        RenderTexture.active = videoTexture;
+        GL.Clear(true, true, Color.black);
+        RenderTexture.active = prev;
+    }
+
+    private void StopVideo()
+    {
+        if (videoPlayer != null && videoPlayer.isPlaying) videoPlayer.Stop();
+        ClearVideoTexture();
+    }
+
     // 전체 화면 플래시와 표면 화면. 인스펙터에서 지정하지 않았으면 만들어 쓴다.
     private void EnsureOverlay()
     {
@@ -680,7 +821,7 @@ public class PlanetDiveDirector : MonoBehaviour
 
             overlayCanvas = go.GetComponent<Canvas>();
             overlayCanvas.renderMode = RenderMode.ScreenSpaceOverlay;
-            overlayCanvas.sortingOrder = 200;   // 설정창(100)보다 위
+            overlayCanvas.sortingOrder = 200;   // 3D 위, 대기영상(300)·설정창(1000) 아래
 
             var scaler = go.GetComponent<CanvasScaler>();
             scaler.uiScaleMode = CanvasScaler.ScaleMode.ScaleWithScreenSize;
@@ -692,6 +833,7 @@ public class PlanetDiveDirector : MonoBehaviour
             surfaceImage = CreateFullscreenImage("SurfaceImage", new Color(1f, 1f, 1f, 0f));
         if (videoImage == null)
             videoImage = CreateFullscreenRawImage("SurfaceVideo", new Color(1f, 1f, 1f, 0f));
+        if (videoTexture != null) videoImage.texture = videoTexture;
         if (flashImage == null)
             flashImage = CreateFullscreenImage("Flash", new Color(flashColor.r, flashColor.g, flashColor.b, 0f));
     }

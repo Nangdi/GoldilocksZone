@@ -1,10 +1,15 @@
 using UnityEngine;
 using UnityEngine.Rendering;
+using UnityEngine.Serialization;
 
 // 태양을 중심으로 하는 원판. 태양에 가까운 쪽은 적색, 골디락스 존은 초록으로 칠한다.
 //
 // 이 오브젝트는 Sun Sphere 의 자식으로 두고 localPosition 0 / localRotation 단위 / localScale 1 을 유지해야 한다.
 // 그래야 태양 스케일(123.75)을 그대로 상속받아 min/max 의 로컬 반지름 값을 좌표로 쓸 수 있다.
+//
+// 원판 평면은 지구 중심 높이에 맞추고, 지구는 원판보다 나중에 그린다(renderQueue + 1).
+// 평면을 지구 아래로 피하면 카메라 각도 때문에 지구가 다른 칸 위에 있는 것처럼 보이고,
+// 평면만 맞추고 순서를 그대로 두면 지구 아랫절반이 원판 색으로 물든다. 둘 다 필요하다.
 //
 // 색은 셰이더를 따로 쓰지 않고 "반지름 -> 색" 그라데이션을 256x1 텍스처로 구워서 입힌다.
 // 메시의 UV.x 를 정규화된 반지름(0 = 태양 중심, 1 = 원판 바깥 끝)으로 깔아두었기 때문에
@@ -32,17 +37,19 @@ public class ZoneDiscRenderer : MonoBehaviour
     [Header("메시")]
     [SerializeField, Range(24, 512)] private int segments = 128;
     [SerializeField, Range(1, 32)] private int radialSegments = 4;
-    // 원판을 지구 아래로 살짝 내리는 이유:
-    // 지구는 queue 2450, 원판은 2990 이라 원판이 나중에 그려지고 ZWrite 도 꺼져 있다.
-    // 둘 다 로컬 y=0 이면 원판이 지구 앞쪽 절반 픽셀 위에 덧칠돼 지구가 반반으로 갈려 보인다.
-    // 지구 반지름보다 조금 더 내려 관통 자체를 없앤다.
-    [Tooltip("궤도면에서 원판을 얼마나 내릴지(태양 로컬 단위). 음수가 아래.")]
-    [SerializeField] private float localYOffset = -0.045f;
-    [Tooltip("켜면 지구 렌더러 크기를 재서 원판이 지구를 관통하지 않을 만큼 자동으로 내린다. " +
+    // 원판 평면을 지구 아래로 내려서는 안 된다.
+    // 카메라가 궤도면을 비스듬히 내려다보기 때문에, 평면이 지구보다 낮으면 시차가 생겨
+    // 지구가 화면상 원판의 엉뚱한 반지름 위에 겹쳐 보인다. 실측으로 0.77칸이나 밀렸다.
+    // 그래서 평면은 지구 중심에 정확히 맞추고, 겹침은 drawEarthAboveDisc 로 해결한다.
+    [Tooltip("alignPlaneToEarth 가 꺼져 있을 때 쓰는 원판의 로컬 Y. 음수가 아래. 태양 중심 기준.")]
+    [SerializeField] private float localYOffset = -0.04f;
+    [Tooltip("켜면 원판 평면을 지구 중심 높이에 정확히 맞춘다. 지구가 선 칸의 색이 곧 그 칸의 판정색이 된다. " +
              "localYOffset 은 무시된다.")]
-    [SerializeField] private bool autoClearEarth = true;
-    [Tooltip("지구 표면과 원판 사이에 남길 여유(지구 반지름 배수).")]
-    [SerializeField, Range(0f, 1f)] private float earthClearance = 0.25f;
+    [FormerlySerializedAs("autoClearEarth")]
+    [SerializeField] private bool alignPlaneToEarth = true;
+    [Tooltip("켜면 지구를 원판보다 나중에 그려서 원판 색이 지구 위에 덧칠되지 않게 한다. " +
+             "평면이 지구 중심을 지나므로 이걸 끄면 지구 아랫절반이 원판 색으로 물든다.")]
+    [SerializeField] private bool drawEarthAboveDisc = true;
     [SerializeField] private string earthPath = "Actor/Universal Rendering Pipeline Materials/Sun Sphere/Earth";
 
     [Header("색")]
@@ -135,33 +142,75 @@ public class ZoneDiscRenderer : MonoBehaviour
         if (autoBuildGradient)
             gradient = BuildGradient(model, OuterRadius);
 
-        planeOffsetY = autoClearEarth ? -EarthClearOffset() : localYOffset;
+        planeOffsetY = ResolvePlaneOffsetY();
 
         BuildMesh(innerRadius, OuterRadius);
         BuildTexture();
         BuildMaterial();
+        ApplyEarthDrawOrder();
     }
 
-    // 지구 렌더러의 월드 크기를 태양 로컬 단위로 환산해 반지름을 구한다.
-    // (지구 모델은 정확한 단위 구가 아니라서 스케일값만으로는 반지름을 알 수 없다.)
-    private float EarthClearOffset()
+    // 원판 평면을 놓을 로컬 Y 를 정한다. 기준은 "태양 중심"이 아니라 "지구 중심"이다.
+    //
+    // 지구는 로컬 y=0 이 아니라 살짝 내려간 곳(현재 -0.04)에 있다. 태양 중심을 기준으로
+    // 평면을 놓으면 지구와 높이가 어긋나고, 카메라가 궤도면을 비스듬히 내려다보는 탓에
+    // 그 높이차가 그대로 화면상 반지름 오차로 바뀐다. 지구를 반지름만큼 피해 내렸을 때
+    // 실측 오차가 0.77칸이었다. 그래서 높이는 무조건 지구 중심에 맞춘다.
+    private float ResolvePlaneOffsetY()
     {
-        var go = GameObject.Find(earthPath);
-        if (go == null) return Mathf.Abs(localYOffset);
+        if (!alignPlaneToEarth) return localYOffset;
 
-        float worldRadius = 0f;
+        var go = GameObject.Find(earthPath);
+        if (go == null) return localYOffset;
+
+        var bounds = new Bounds();
+        bool found = false;
         foreach (var r in go.GetComponentsInChildren<Renderer>())
         {
-            // 지구를 감싼 글로우 파티클까지 포함하면 원판이 과하게 내려간다.
-            if (r is ParticleSystemRenderer) continue;
-            worldRadius = Mathf.Max(worldRadius, r.bounds.extents.y);
+            // 글로우 파티클과 2D 스프라이트는 중심을 흐트러뜨리므로 본체 메시만 본다.
+            if (!(r is MeshRenderer) && !(r is SkinnedMeshRenderer)) continue;
+            if (!found) { bounds = r.bounds; found = true; }
+            else bounds.Encapsulate(r.bounds);
         }
-        if (worldRadius <= 0f) return Mathf.Abs(localYOffset);
+        if (!found) return localYOffset;
 
-        float scale = transform.lossyScale.y;
-        if (Mathf.Approximately(scale, 0f)) return Mathf.Abs(localYOffset);
+        // 원판은 localPosition 0 / 회전 없음 / 스케일 1 로 두기 때문에
+        // 이 로컬 공간은 태양 로컬 공간과 같다. 지구가 어디 매달려 있든
+        // 월드 중심을 다시 들여보므로 계층 구조가 바뀌어도 그대로 동작한다.
+        return transform.InverseTransformPoint(bounds.center).y;
+    }
 
-        return worldRadius / scale * (1f + earthClearance);
+    // 지구를 원판보다 나중에 그리게 한다.
+    //
+    // 평면이 지구 중심을 지나므로 지구의 아래쪽 절반은 물리적으로 평면보다 뒤에 있다.
+    // 원판은 나중에 그려지고 ZWrite 가 꺼져 있어서, 깊이 테스트가 정상 동작한 결과가
+    // 곧 "지구 아랫절반이 원판 색으로 덮이는" 현상이 된다. 평면을 옮겨 피하면 위의
+    // 시차 문제가 되살아나므로, 대신 불투명한 지구를 원판 뒤에 그려 덮어버린다.
+    //
+    // 지구는 큐만 옮길 뿐 여전히 깊이를 쓰므로 태양 뒤로 돌아가면 정상적으로 가려진다.
+    // 지구 글로우 파티클(3000)은 건드리지 않아 지금처럼 지구 위에 남는다.
+    private void ApplyEarthDrawOrder()
+    {
+        if (!drawEarthAboveDisc) return;
+
+        var go = GameObject.Find(earthPath);
+        if (go == null) return;
+
+        int target = renderQueue + 1;
+        foreach (var r in go.GetComponentsInChildren<Renderer>())
+        {
+            // 행성 본체 메시만 대상으로 한다.
+            // 글로우 파티클은 지구 위에 남아야 하고, PlanetSpriteVisual 이 만드는
+            // SpriteRenderer 는 유니티 공용 머티리얼(Sprites-Default)을 쓰기 때문에
+            // 여기서 큐를 건드리면 프로젝트의 모든 스프라이트에 영향이 간다.
+            if (!(r is MeshRenderer) && !(r is SkinnedMeshRenderer)) continue;
+
+            foreach (var m in r.sharedMaterials)
+            {
+                // 같은 값을 다시 쓰면 에디터에서 머티리얼이 매번 더티가 되므로 달라질 때만 건드린다.
+                if (m != null && m.renderQueue != target) m.renderQueue = target;
+            }
+        }
     }
 
     private GoldilocksZoneModel ResolveModel()
@@ -172,20 +221,27 @@ public class ZoneDiscRenderer : MonoBehaviour
             : FindObjectOfType<GoldilocksZoneModel>();
     }
 
-    // 존 경계에서 fadeWidthStep 만큼 "바깥쪽으로" 색이 섞이게 만든다.
-    // 존이 D4~D6 이고 폭이 1.0 이면 D3.5~D4.5 에서 적색->녹색, D6.5~D7.5 에서 녹색->바깥색.
+    // 존 경계를 가운데에 두고 fadeWidthStep 을 안팔/바깥으로 반씩 나눠 섞는다.
+    // 경계는 칸과 칸 사이(D2.5 같은 반칸 지점)이므로, 이렇게 해야 칸 중심에 선 지구가
+    // 전이 구간이 아닌 단색 위에 올라간다. 존이 D3~D5 이고 폭이 0.4 면
+    // D2.3~D2.7 에서 적색->녹색, D5.3~D5.7 에서 녹색->바깥색이라
+    // D2 는 순수한 빨강, D3~D5 는 순수한 초록, D6 부터는 바깥색이 된다.
+    //
+    // 전이 폭의 상한은 지구 크기가 정한다. 지구 반지름이 0.264칸이므로
+    // 반폭(fade/2)이 0.5 - 0.264 = 0.236 칸을 넘으면 칸 중심의 지구도 전이 구간을 물기 시작한다.
     private Gradient BuildGradient(GoldilocksZoneModel model, float outer)
     {
         float fade = Mathf.Max(0f, model.Config.fadeWidthStep);
-        float innerBoundary = model.ZoneInnerBoundaryStep;   // 예) 3.5
-        float outerBoundary = model.ZoneOuterBoundaryStep;   // 예) 6.5
+        float half = fade * 0.5f;
+        float innerBoundary = model.ZoneInnerBoundaryStep;   // 예) 2.5
+        float outerBoundary = model.ZoneOuterBoundaryStep;   // 예) 5.5
 
         // 키가 같은 위치에 겹치면 그라데이션이 뭉개지므로 최소 간격을 준다.
         const float minGap = 0.0005f;
-        float uHotEnd = U(model, innerBoundary, outer);
-        float uHabStart = Mathf.Max(U(model, innerBoundary + fade, outer), uHotEnd + minGap);
-        float uHabEnd = Mathf.Max(U(model, outerBoundary, outer), uHabStart + minGap);
-        float uOuterStart = Mathf.Max(U(model, outerBoundary + fade, outer), uHabEnd + minGap);
+        float uHotEnd = U(model, innerBoundary - half, outer);
+        float uHabStart = Mathf.Max(U(model, innerBoundary + half, outer), uHotEnd + minGap);
+        float uHabEnd = Mathf.Max(U(model, outerBoundary - half, outer), uHabStart + minGap);
+        float uOuterStart = Mathf.Max(U(model, outerBoundary + half, outer), uHabEnd + minGap);
 
         // outerColor 가 투명이면 RGB 를 섞지 않고 초록이 그대로 사라지게 한다.
         // 그러지 않으면 알파가 0 인데도 페이드 중간 구간에 outerColor 의 색조가 비쳐

@@ -62,8 +62,12 @@ public class SunLevelConfig
     public int zoneMaxStep = 4;
     // 태양 Point Light 밝기. 0 이하이면 조명을 건드리지 않는다.
     public float lightIntensity = 0.6f;
-    // 태양 글로우 파티클 크기 배율. 0 이하이면 건드리지 않는다.
-    public float glowScale = 0.8f;
+    // 태양 전체(본체 + 표면 불꽃 + 코로나) 크기 배율. 0 이하이면 건드리지 않는다.
+    // 태양 표면은 D1 에서 9.7칸 떨어져 있어 2.7 배까지 궤도를 침범하지 않지만,
+    // 코로나가 본체보다 1.5 배 넓게 퍼지므로 1.5 를 넘기지 않는 편이 안전하다.
+    public float sunScale = 1f;
+    // 코로나만 본체 대비 더/덜 퍼지게 하는 여분의 배율. 1 이면 태양과 같은 비율로 커진다.
+    public float glowScale = 1f;
 }
 
 [Serializable]
@@ -80,22 +84,25 @@ public class GoldilocksJson
     public int initialStep = 1;
 
     // 태양 세기 단계별 골디락스 존 범위. 세기가 올라갈수록 존이 바깥으로 밀려난다.
+    // D1~D9 기준 (뜨거움/거주가능/추움) 칸 수: 1단계 1-3-5, 2단계 2-3-4, 3단계 3-3-3.
     public List<SunLevelConfig> sunLevels = new List<SunLevelConfig>
     {
-        new SunLevelConfig { level = 1, zoneMinStep = 2, zoneMaxStep = 4, lightIntensity = 0.6f, glowScale = 0.8f },
-        new SunLevelConfig { level = 2, zoneMinStep = 4, zoneMaxStep = 6, lightIntensity = 1.0f, glowScale = 1.0f },
-        new SunLevelConfig { level = 3, zoneMinStep = 6, zoneMaxStep = 8, lightIntensity = 1.6f, glowScale = 1.3f },
+        new SunLevelConfig { level = 1, zoneMinStep = 2, zoneMaxStep = 4, lightIntensity = 0.6f, sunScale = 0.75f, glowScale = 1f },
+        new SunLevelConfig { level = 2, zoneMinStep = 3, zoneMaxStep = 5, lightIntensity = 1.0f, sunScale = 1.0f,  glowScale = 1f },
+        new SunLevelConfig { level = 3, zoneMinStep = 4, zoneMaxStep = 6, lightIntensity = 1.6f, sunScale = 1.35f, glowScale = 1f },
     };
 
     // 시작할 때의 태양 세기 단계
     public int initialSunLevel = 2;
 
     // sunLevels 가 비어 있거나 현재 단계를 찾지 못할 때 쓰는 예비 존 범위(양끝 포함)
-    public int zoneMinStep = 4;
-    public int zoneMaxStep = 6;
+    public int zoneMinStep = 3;
+    public int zoneMaxStep = 5;
 
-    // 존 경계 그라데이션 폭(단계 단위). 1.0 이면 D3.5~D4.5 에서 색이 섞인다.
-    public float fadeWidthStep = 1.0f;
+    // 존 경계 그라데이션 폭(단계 단위). 경계를 가운데 두고 안팔/바깥으로 반씩 퍼진다.
+    // 0.4 면 경계 D2.5 기준 D2.3~D2.7 에서만 색이 섞이므로 칸 중심(D2, D3)은 단색이 된다.
+    // 지구 반지름이 0.264칸이라 0.47 을 넘기면 칸 위의 지구가 전이 구간에 걸친다.
+    public float fadeWidthStep = 0.4f;
 
     // 지구 이동 부드러움. SmoothDamp 시간상수(초). 작을수록 빠르게 따라붙는다.
     public float moveSmoothTime = 0.35f;
@@ -128,11 +135,20 @@ public class GoldilocksJson
     // 대기영상 폴더. StreamingAssets/<videoRootFolder>/<이 이름>/ 안의 파일을 반복 재생한다.
     public string idleVideoFolder = "idle";
 
+    // 대기 화면에 띄우는 문구. 제목 위 설명 줄 / 제목 / 체험 유도 문구
+    public string attractHeading = "생명체가 거주할 수 있는 영역";
+    public string attractTitle = "골디락스존";
+    public string attractPrompt = "지구를 움직여 체험을 시작해 보세요.";
+
     // 인트로 멘트 한 줄이 머무는 시간(초)
     public float introSecondsPerMessage = 3f;
 
     // 멘트가 바뀔 때 흐려졌다 나타나는 시간(초)
     public float introFadeSeconds = 0.4f;
+
+    // 인트로가 끝나고 대기영상·안내막이 걷히며 3D 장면이 드러나는 시간(초).
+    // 체험이 끝나 대기영상으로 돌아갈 때도 같은 시간으로 덮인다.
+    public float sceneFadeSeconds = 1.5f;
 
     // 인트로 멘트. 줄바꿈은 \n 으로 넣는다.
     public List<string> introMessages = new List<string>
