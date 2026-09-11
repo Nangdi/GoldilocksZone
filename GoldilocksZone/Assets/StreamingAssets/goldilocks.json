@@ -31,7 +31,7 @@
     "initialSunLevel": 2,
     "zoneMinStep": 3,
     "zoneMaxStep": 5,
-    "fadeWidthStep": 0.4,
+    "fadeWidthStep": 1.0,
     "moveSmoothTime": 0.3499999940395355,
     "arriveEpsilon": 0.004999999888241291,
     "settleDelay": 1.0,

@@ -100,9 +100,10 @@ public class GoldilocksJson
     public int zoneMaxStep = 5;
 
     // 존 경계 그라데이션 폭(단계 단위). 경계를 가운데 두고 안팔/바깥으로 반씩 퍼진다.
-    // 0.4 면 경계 D2.5 기준 D2.3~D2.7 에서만 색이 섞이므로 칸 중심(D2, D3)은 단색이 된다.
-    // 지구 반지름이 0.264칸이라 0.47 을 넘기면 칸 위의 지구가 전이 구간에 걸친다.
-    public float fadeWidthStep = 0.4f;
+    // 1.0 이면 경계 D2.5 기준 D2~D3 에 걸쳐 색이 섞인다. 대기영상(video/idle)의 원판이
+    // 궤도 한 칸 폭으로 번지는 것과 같은 인상을 주려고 넓게 잡았다.
+    // 칸 중심을 단색으로 두고 싶으면 0.47 이하로 줄인다(지구 반지름이 0.264칸이라 그 위부터 지구가 전이 구간에 걸친다).
+    public float fadeWidthStep = 1f;
 
     // 지구 이동 부드러움. SmoothDamp 시간상수(초). 작을수록 빠르게 따라붙는다.
     public float moveSmoothTime = 0.35f;

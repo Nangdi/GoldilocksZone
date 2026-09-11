@@ -24,7 +24,8 @@ public class ZoneDiscRenderer : MonoBehaviour
     [Tooltip("원판 메시가 시작하는 반지름. 태양 표면(0.5)보다 안쪽에서 시작해야 " +
              "태양에 가려진 채로 서서히 나타난다. 0 으로 두면 중심에 겹친 정점이 생기므로 조금 띄운다.")]
     [SerializeField] private float innerRadius = 0.1f;
-    [Tooltip("마지막 단계 바깥으로 얼마나 더 그릴지(단계 단위). 0.5 면 D9.5 까지 그린다.")]
+    [Tooltip("마지막 단계 바깥으로 얼마나 더 그릴지(단계 단위). 0.5 면 D9.5 까지 그린다. " +
+             "outerFadeWidthStep 이 여기까지 닿지 못하면 원판 끝에서 색이 딱 끊긴다.")]
     [SerializeField] private float outerMarginStep = 0.5f;
 
     [Header("태양 경계 블렌딩")]
@@ -52,18 +53,25 @@ public class ZoneDiscRenderer : MonoBehaviour
     [SerializeField] private bool drawEarthAboveDisc = true;
     [SerializeField] private string earthPath = "Actor/Universal Rendering Pipeline Materials/Sun Sphere/Earth";
 
+    [Header("바깥 경계 블렌딩")]
+    [Tooltip("존 바깥색(outerColor)이 우주로 서서히 사라지는 폭(단계 단위). " +
+             "존 바깥 경계에서 시작해 이만큼 지나면 완전히 투명해진다. 0 이면 원판 끝까지 같은 농도로 칠한다.")]
+    [SerializeField] private float outerFadeWidthStep = 2f;
+
     [Header("색")]
     [Tooltip("켜두면 골디락스 존 설정에서 그라데이션을 자동으로 만든다. 끄면 아래 gradient 를 손으로 편집한 그대로 사용한다.")]
     [SerializeField] private bool autoBuildGradient = true;
-    // 알파를 0.35 근처로 낮게 잡은 이유:
-    // 씬의 PostFX 볼륨에 Bloom 이 threshold 0.56 으로 켜져 있어서, 검은 우주 위에 합성된
-    // 원판 색이 그보다 밝으면 통째로 블룸에 타서 흰 덩어리로 번진다.
+    // 색을 어둡고 탁하게, 알파는 0.6 근처로 잡은 이유:
+    // 대기영상(video/idle)의 원판이 이런 톤이다. 적갈색 / 짙은 녹색 / 남색이 별이 비칠 만큼만
+    // 깔리고, 경계는 궤도 한 칸 폭으로 넓게 번진다. 체험씬도 같은 인상을 주도록 맞춘다.
+    // 씬의 PostFX 볼륨에 Bloom 이 threshold 0.56 으로 켜져 있어서, 합성된 원판 색(색 x 알파)이
+    // 그보다 밝으면 통째로 블룸에 타서 흰 덩어리로 번진다. 색 자체가 어두워 여유가 있다.
     [Tooltip("태양에 너무 가까운 구간")]
-    [SerializeField] private Color hotColor = new Color(1f, 0.24f, 0.14f, 0.33f);
+    [SerializeField] private Color hotColor = new Color(0.38f, 0.11f, 0.12f, 0.6f);
     [Tooltip("생물이 살 수 있는 구간")]
-    [SerializeField] private Color habitableColor = new Color(0.25f, 1f, 0.42f, 0.33f);
-    [Tooltip("골디락스 존 바깥(너무 추운 구간). 기본은 알파 0 이라 보이지 않는다. 알파만 올리면 언제든 색을 입힐 수 있다.")]
-    [SerializeField] private Color outerColor = new Color(0.3f, 0.62f, 1f, 0f);
+    [SerializeField] private Color habitableColor = new Color(0.02f, 0.33f, 0.15f, 0.6f);
+    [Tooltip("골디락스 존 바깥(너무 추운 구간). 알파를 0 으로 두면 초록 밖이 바로 투명해진다.")]
+    [SerializeField] private Color outerColor = new Color(0.01f, 0.1f, 0.3f, 0.6f);
     [Tooltip("적색->녹색 전이를 색상환(빨강-주황-노랑-연두-초록)을 따라 돌린다. " +
              "끄면 RGB 를 직선으로 섞는데, 그러면 중간이 탁한 올리브색으로 어두워져 " +
              "경계가 한 번 투명해졌다 돌아오는 것처럼 보인다.")]
@@ -84,6 +92,10 @@ public class ZoneDiscRenderer : MonoBehaviour
     private Texture2D gradientTexture;
     private bool dirty = true;
     private float planeOffsetY;
+    // 바깥색이 완전히 칠해지기 시작하는 정규화 반지름(존 바깥 경계 + 전이 반폭). BuildTexture 의 바깥 페이드 기준점.
+    private float uOuterFull = 1f;
+    // 바깥색이 완전히 사라지는 정규화 반지름. 음수면 바깥 페이드를 쓰지 않는다.
+    private float outerFadeU = -1f;
 
     // 마지막으로 만들어진 원판의 바깥 반지름(태양 로컬 단위)
     public float OuterRadius { get; private set; }
@@ -141,6 +153,11 @@ public class ZoneDiscRenderer : MonoBehaviour
 
         if (autoBuildGradient)
             gradient = BuildGradient(model, OuterRadius);
+
+        uOuterFull = U(model, model.ZoneOuterBoundaryStep + Mathf.Max(0f, model.Config.fadeWidthStep) * 0.5f, OuterRadius);
+        outerFadeU = outerFadeWidthStep > 0f
+            ? U(model, model.ZoneOuterBoundaryStep + Mathf.Max(0f, model.Config.fadeWidthStep) * 0.5f + outerFadeWidthStep, OuterRadius)
+            : -1f;
 
         planeOffsetY = ResolvePlaneOffsetY();
 
@@ -390,6 +407,10 @@ public class ZoneDiscRenderer : MonoBehaviour
         float uSunEnd = (sunSurfaceRadius + sunBlendWidth) / OuterRadius;
         bool blendSun = sunBlendWidth > 0f && uSunEnd > uSunStart;
 
+        // 바깥 페이드도 같은 이유로 마스크로 곱한다. 존 바깥 경계에서 outerFadeWidthStep 만큼
+        // 지나는 동안 outerColor 가 우주로 녹아들어 원판 끝이 어디인지 보이지 않게 한다.
+        bool fadeOuter = outerFadeU > uOuterFull;
+
         var pixels = new Color[res];
         for (int i = 0; i < res; i++)
         {
@@ -397,6 +418,8 @@ public class ZoneDiscRenderer : MonoBehaviour
             Color c = gradient.Evaluate(u);
             if (blendSun)
                 c.a *= Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(uSunStart, uSunEnd, u));
+            if (fadeOuter)
+                c.a *= 1f - Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(uOuterFull, outerFadeU, u));
             pixels[i] = c;
         }
 
