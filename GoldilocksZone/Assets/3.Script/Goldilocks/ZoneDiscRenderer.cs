@@ -61,21 +61,27 @@ public class ZoneDiscRenderer : MonoBehaviour
     [Header("색")]
     [Tooltip("켜두면 골디락스 존 설정에서 그라데이션을 자동으로 만든다. 끄면 아래 gradient 를 손으로 편집한 그대로 사용한다.")]
     [SerializeField] private bool autoBuildGradient = true;
-    // 색을 어둡고 탁하게, 알파는 0.6 근처로 잡은 이유:
+    // 색을 어둡고 탁하게, 알파는 0.5 근처로 잡은 이유:
     // 대기영상(video/idle)의 원판이 이런 톤이다. 적갈색 / 짙은 녹색 / 남색이 별이 비칠 만큼만
     // 깔리고, 경계는 궤도 한 칸 폭으로 넓게 번진다. 체험씬도 같은 인상을 주도록 맞춘다.
+    // (처음엔 대기영상 픽셀값에 맞춰 0.6 이었는데 실제로 보니 원판이 조금 무거워서 0.5 로 내렸다.)
     // 씬의 PostFX 볼륨에 Bloom 이 threshold 0.56 으로 켜져 있어서, 합성된 원판 색(색 x 알파)이
     // 그보다 밝으면 통째로 블룸에 타서 흰 덩어리로 번진다. 색 자체가 어두워 여유가 있다.
     [Tooltip("태양에 너무 가까운 구간")]
-    [SerializeField] private Color hotColor = new Color(0.38f, 0.11f, 0.12f, 0.6f);
+    [SerializeField] private Color hotColor = new Color(0.38f, 0.11f, 0.12f, 0.5f);
     [Tooltip("생물이 살 수 있는 구간")]
-    [SerializeField] private Color habitableColor = new Color(0.02f, 0.33f, 0.15f, 0.6f);
+    [SerializeField] private Color habitableColor = new Color(0.02f, 0.33f, 0.15f, 0.5f);
     [Tooltip("골디락스 존 바깥(너무 추운 구간). 알파를 0 으로 두면 초록 밖이 바로 투명해진다.")]
-    [SerializeField] private Color outerColor = new Color(0.01f, 0.1f, 0.3f, 0.6f);
+    [SerializeField] private Color outerColor = new Color(0.01f, 0.1f, 0.3f, 0.5f);
+    // 기본은 끈다. 색상환을 따라 돌리면 중간에 노란 띠가 생겨 적색과 녹색이 거기서
+    // 딱 나뉘어 보인다. 끄면 RGB 직선 보간인데, 예전에 그 중간이 어둡게 꺼져 보였던 건
+    // 색이 아니라 sRGB(감마) 값끼리 섞어서 생긴 명도 꺼짐이었다. 지금은 BuildTexture 가
+    // 선형광(linear) 공간에서 섞으므로 중간 명도가 양끝의 평균으로 유지되어
+    // 녹색->남색 경계처럼 자연스럽게 이어진다. 자세한 건 EvaluateLinear 주석 참고.
     [Tooltip("적색->녹색 전이를 색상환(빨강-주황-노랑-연두-초록)을 따라 돌린다. " +
-             "끄면 RGB 를 직선으로 섞는데, 그러면 중간이 탁한 올리브색으로 어두워져 " +
-             "경계가 한 번 투명해졌다 돌아오는 것처럼 보인다.")]
-    [SerializeField] private bool blendThroughHue = true;
+             "켜면 중간에 노란 띠가 생겨 경계가 또렷해지고, 끄면 RGB 를 직선으로 섞어 " +
+             "녹색->바깥색 경계처럼 부드럽게 이어진다.")]
+    [SerializeField] private bool blendThroughHue = false;
     [Tooltip("왼쪽 0 = 태양 중심, 오른쪽 1 = 원판 바깥 끝. autoBuildGradient 가 켜져 있으면 자동으로 덮어쓴다.")]
     [SerializeField] private Gradient gradient = new Gradient();
     [SerializeField, Range(16, 512)] private int gradientResolution = 256;
@@ -415,7 +421,7 @@ public class ZoneDiscRenderer : MonoBehaviour
         for (int i = 0; i < res; i++)
         {
             float u = (float)i / (res - 1);
-            Color c = gradient.Evaluate(u);
+            Color c = EvaluateLinear(gradient, u);
             if (blendSun)
                 c.a *= Mathf.SmoothStep(0f, 1f, Mathf.InverseLerp(uSunStart, uSunEnd, u));
             if (fadeOuter)
@@ -425,6 +431,43 @@ public class ZoneDiscRenderer : MonoBehaviour
 
         gradientTexture.SetPixels(pixels);
         gradientTexture.Apply(false);
+    }
+
+    // Gradient.Evaluate 대신 색 키 사이를 선형광(linear) 공간에서 섞는다.
+    //
+    // 프로젝트는 Linear 색공간이고 인스펙터의 Color 값은 sRGB 다. Gradient 는 그 sRGB 값을
+    // 그대로 직선 보간하는데, 감마 곡선 위에서 섞으면 중간 명도가 양끝 평균보다 푹 꺼진다.
+    // 빨강(0.38,0.11,0.12)->초록(0.02,0.33,0.15)처럼 채널이 서로 반대인 색끼리는 이 꺼짐이
+    // 심해서, 전이 구간이 우주 배경에 묻혀 마치 색이 비어 있는 것처럼 보였다.
+    // 초록->남색은 G/B 채널이 겹쳐서 꺼짐이 작아 티가 안 났을 뿐 원리는 같다.
+    //
+    // 키를 .linear 로 바꿔 섞고 다시 .gamma 로 되돌리면 sRGB 텍스처에 넣어도
+    // 셰이더가 보는 결과는 선형광에서 섞은 것과 같다. 알파는 감마 보정 대상이 아니므로
+    // Gradient 의 알파 키 보간을 그대로 쓴다.
+    private static Color EvaluateLinear(Gradient g, float u)
+    {
+        var keys = g.colorKeys;
+        float alpha = g.Evaluate(u).a;
+
+        if (keys.Length == 0) return new Color(0f, 0f, 0f, alpha);
+        if (keys.Length == 1 || u <= keys[0].time) return WithAlpha(keys[0].color, alpha);
+        if (u >= keys[keys.Length - 1].time) return WithAlpha(keys[keys.Length - 1].color, alpha);
+
+        int hi = 1;
+        while (hi < keys.Length - 1 && keys[hi].time < u) hi++;
+        var a = keys[hi - 1];
+        var b = keys[hi];
+
+        // 키가 같은 위치에 겹치면 InverseLerp 가 0 을 돌려 앞 키 색이 쓰인다.
+        float t = Mathf.InverseLerp(a.time, b.time, u);
+        Color mixed = Color.Lerp(a.color.linear, b.color.linear, t).gamma;
+        return WithAlpha(mixed, alpha);
+    }
+
+    private static Color WithAlpha(Color c, float a)
+    {
+        c.a = a;
+        return c;
     }
 
     private void BuildMaterial()

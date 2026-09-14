@@ -2938,40 +2938,40 @@ MonoBehaviour:
   earthPath: Actor/Universal Rendering Pipeline Materials/Sun Sphere/Earth
   outerFadeWidthStep: 2
   autoBuildGradient: 1
-  hotColor: {r: 0.38, g: 0.11, b: 0.12, a: 0.6}
-  habitableColor: {r: 0.02, g: 0.33, b: 0.15, a: 0.6}
-  outerColor: {r: 0.01, g: 0.1, b: 0.3, a: 0.6}
-  blendThroughHue: 1
+  hotColor: {r: 0.38, g: 0.11, b: 0.12, a: 0.5}
+  habitableColor: {r: 0.02, g: 0.33, b: 0.15, a: 0.5}
+  outerColor: {r: 0.01, g: 0.1, b: 0.3, a: 0.5}
+  blendThroughHue: 0
   gradient:
     serializedVersion: 2
-    key0: {r: 0.38, g: 0.11, b: 0.12, a: 0.6}
-    key1: {r: 0.38, g: 0.11, b: 0.12, a: 0.6}
-    key2: {r: 0.36333334, g: 0.30094376, b: 0.077457026, a: 0.6}
-    key3: {r: 0.166974, g: 0.34666666, b: 0.047457036, a: 0.6}
-    key4: {r: 0.02, g: 0.33, b: 0.15, a: 0.6}
-    key5: {r: 0.02, g: 0.33, b: 0.15, a: 0.6}
-    key6: {r: 0.01, g: 0.1, b: 0.3, a: 0.6}
-    key7: {r: 0.01, g: 0.1, b: 0.3, a: 0.6}
+    key0: {r: 0.38, g: 0.11, b: 0.12, a: 0.5}
+    key1: {r: 0.38, g: 0.11, b: 0.12, a: 0.5}
+    key2: {r: 0.02, g: 0.33, b: 0.15, a: 0.5}
+    key3: {r: 0.02, g: 0.33, b: 0.15, a: 0.5}
+    key4: {r: 0.01, g: 0.1, b: 0.3, a: 0.5}
+    key5: {r: 0.01, g: 0.1, b: 0.3, a: 0.5}
+    key6: {r: 0, g: 0, b: 0, a: 0}
+    key7: {r: 0, g: 0, b: 0, a: 0}
     ctime0: 0
     ctime1: 44808
-    ctime2: 45729
-    ctime3: 46650
-    ctime4: 47572
-    ctime5: 53099
-    ctime6: 55862
-    ctime7: 65535
+    ctime2: 47572
+    ctime3: 53099
+    ctime4: 55862
+    ctime5: 65535
+    ctime6: 0
+    ctime7: 0
     atime0: 0
     atime1: 44808
-    atime2: 45729
-    atime3: 46650
-    atime4: 47572
-    atime5: 53099
-    atime6: 55862
-    atime7: 65535
+    atime2: 47572
+    atime3: 53099
+    atime4: 55862
+    atime5: 65535
+    atime6: 0
+    atime7: 0
     m_Mode: 0
     m_ColorSpace: -1
-    m_NumColorKeys: 8
-    m_NumAlphaKeys: 8
+    m_NumColorKeys: 6
+    m_NumAlphaKeys: 6
   gradientResolution: 256
   blendMode: 0
   renderQueue: 2990
