@@ -41,7 +41,7 @@
     "idleTimeoutSeconds": 30.0,
     "idleVideoFolder": "idle",
     "attractHeading": "생명체가 거주할 수 있는 영역",
-    "attractTitle": "골디락스존",
+    "attractTitle": "생명가능지대",
     "attractPrompt": "지구를 움직여 체험을 시작해 보세요.",
     "introSecondsPerMessage": 3.0,
     "introFadeSeconds": 0.4000000059604645,

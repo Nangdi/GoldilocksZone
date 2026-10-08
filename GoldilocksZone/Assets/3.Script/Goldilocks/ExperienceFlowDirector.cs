@@ -41,7 +41,7 @@ public class ExperienceFlowDirector : MonoBehaviour
     [SerializeField] private Image dimImage;
     [Tooltip("대기 화면 - 제목 위 설명 줄 (문구는 goldilocks.json attractHeading)")]
     [SerializeField] private TextMeshProUGUI headingText;
-    [Tooltip("대기 화면 - 제목 (goldilocks.json attractTitle)")]
+    [Tooltip("대기 화면 - 제목 (연결하면 인스펙터 문구 유지, 비워두면 goldilocks.json attractTitle)")]
     [SerializeField] private TextMeshProUGUI titleText;
     [Tooltip("대기 화면 - 체험 유도 문구 (goldilocks.json attractPrompt)")]
     [SerializeField] private TextMeshProUGUI promptText;
@@ -108,6 +108,9 @@ public class ExperienceFlowDirector : MonoBehaviour
     // (인트로를 띄우는 동안 정착 이벤트가 지나가 버리기 때문)
     private bool settledDuringIntro;
 
+    // 대기에 들어간 뒤 처음 받은 D 값. -1 이면 아직 받지 못했다.
+    private int attractBaselineStep = -1;
+
     private float Dt { get { return model != null ? model.DeltaTime : Time.unscaledDeltaTime; } }
     private GoldilocksJson Config { get { return model.Config; } }
     private float SceneFade { get { return Mathf.Max(0.01f, Config.sceneFadeSeconds); } }
@@ -165,11 +168,21 @@ public class ExperienceFlowDirector : MonoBehaviour
 
     // ── 신호 ──────────────────────────────────────────────────────
 
-    // 대기 중에는 지구가 이미 그 자리에 있어도(같은 D 값이어도) 신호만 오면 안내를 시작한다.
-    // 체험자가 모형을 건드렸다는 사실 자체가 시작 조건이기 때문이다.
+    // 장비는 현재 위치를 일정 주기로 계속 보낸다(D1 에 있으면 D1 을 반복).
+    // 그래서 신호가 왔다는 것만으로는 시작하지 않는다. 대기에 들어간 뒤 처음 받은 값을 기준으로 잡고,
+    // 그와 다른 위치가 들어와야(체험자가 모형을 실제로 옮겨야) 안내를 시작한다.
+    // 기준을 첫 수신값으로 잡는 이유: 부팅 직후 initialStep 과 실제 모형 위치가 달라도 바로 시작되지 않도록.
     private void OnStepSignal(int step)
     {
-        if (Phase == FlowPhase.Attract) EnterIntro();
+        if (Phase != FlowPhase.Attract) return;
+
+        if (attractBaselineStep < 0)
+        {
+            attractBaselineStep = step;
+            return;
+        }
+
+        if (step != attractBaselineStep) EnterIntro();
     }
 
     private void OnStepChanged(int step)
@@ -189,6 +202,7 @@ public class ExperienceFlowDirector : MonoBehaviour
     {
         Phase = FlowPhase.Attract;
         idleTimer = 0f;
+        attractBaselineStep = -1;
 
         if (diveDirector != null) diveDirector.DirectorEnabled = false;
 
@@ -475,12 +489,16 @@ public class ExperienceFlowDirector : MonoBehaviour
         if (attractImage == null) attractImage = CreateRawImage("AttractVideo", Color.white);
         if (dimImage == null) dimImage = CreateImage("Dim", Color.black);
         if (headingText == null) headingText = CreateText("AttractHeading", 44f, new Vector2(0f, 0.64f), new Vector2(1f, 0.72f));
-        if (titleText == null) titleText = CreateText("AttractTitle", 110f, new Vector2(0f, 0.50f), new Vector2(1f, 0.64f));
+        if (titleText == null)
+        {
+            // 씬에 연결된 제목은 인스펙터 문구를 그대로 쓰고, 런타임에 만들 때만 json 문구를 넣는다.
+            titleText = CreateText("AttractTitle", 110f, new Vector2(0f, 0.50f), new Vector2(1f, 0.64f));
+            titleText.text = Config.attractTitle;
+        }
         if (promptText == null) promptText = CreateText("AttractPrompt", 42f, new Vector2(0f, 0.16f), new Vector2(1f, 0.24f));
         if (messageText == null) messageText = CreateText("Message", 46f, Vector2.zero, Vector2.one);
 
         headingText.text = Config.attractHeading;
-        titleText.text = Config.attractTitle;
         promptText.text = Config.attractPrompt;
         messageText.text = string.Empty;
 

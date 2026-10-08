@@ -218,8 +218,8 @@ public class GoldilocksZoneModel : MonoBehaviour
     {
         step = Mathf.Clamp(step, 1, StepCount);
 
-        // 값이 그대로여도 "신호가 들어왔다"는 사실 자체가 필요한 곳이 있다.
-        // 대기영상에서는 지구가 이미 그 자리에 있어도 D 신호가 오면 체험을 시작해야 한다.
+        // 값이 그대로여도 매 수신마다 알린다. 장비가 현재 위치를 계속 흘려보내므로
+        // 받는 쪽은 "신호가 왔다"가 아니라 값의 변화를 보고 판단해야 한다(ExperienceFlowDirector 참고).
         OnStepSignal?.Invoke(step);
 
         if (step == CurrentStep) return;
